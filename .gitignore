@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# COSMIC AI privacy and local files
+.venv/
+chat_history/
+.streamlit/secrets.toml
+.env
+__pycache__/
+*.py[cod]
