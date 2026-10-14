@@ -1,542 +1,475 @@
 
-import os
 import base64
 from pathlib import Path
 
 import requests
 import streamlit as st
 
-# =========================================================
+# ==================================================
 # SINGULARITY AI | BY QUNIT
-# Complete Streamlit application
-# =========================================================
+# ==================================================
 
 st.set_page_config(
     page_title="SINGULARITY AI | QUNIT",
     page_icon="🌌",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
-
-# ------------------------- CONFIG -------------------------
 
 APP_DIR = Path(__file__).parent
 LOGO_PATH = APP_DIR / "singularity_logo.png"
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-
+API_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "openrouter/free"
 
 SYSTEM_PROMPT = """
 You are SINGULARITY AI, created by QUNIT.
-
-Be intelligent, helpful, accurate, creative, and clear.
-Explain difficult concepts in simple language when appropriate.
-Use readable formatting, examples, and step-by-step reasoning.
-Be honest when uncertain. Never invent facts or sources.
-Adapt your response to the user's question and requested detail.
+Be helpful, intelligent, creative, clear, and accurate.
+Explain difficult ideas simply when useful.
+Use headings, examples, and step-by-step explanations when appropriate.
+Be honest when uncertain and never invent facts.
 """
 
-# ------------------------- SECRETS -------------------------
-
-def get_secret(name, fallback=""):
+def get_secret(name, default=""):
     try:
-        return str(st.secrets.get(name, fallback)).strip()
+        return str(st.secrets.get(name, default)).strip()
     except Exception:
-        return str(fallback).strip()
-
+        return default
 
 API_KEY = get_secret("OPENROUTER_API_KEY")
-MODEL = get_secret("OPENROUTER_MODEL", DEFAULT_MODEL)
-
-if not MODEL:
-    MODEL = DEFAULT_MODEL
-
-# ------------------------- SESSION STATE -------------------------
+MODEL = get_secret("OPENROUTER_MODEL", DEFAULT_MODEL) or DEFAULT_MODEL
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "input_counter" not in st.session_state:
-    st.session_state.input_counter = 0
+if "pending_prompt" not in st.session_state:
+    st.session_state.pending_prompt = None
 
-if "last_error" not in st.session_state:
-    st.session_state.last_error = ""
+# ==================================================
+# OPTIONAL LOGO
+# ==================================================
 
-# ------------------------- OPTIONAL LOGO -------------------------
-
-def get_logo_data():
-    if not LOGO_PATH.exists():
-        return None
-
+def load_logo():
     try:
-        encoded = base64.b64encode(LOGO_PATH.read_bytes()).decode("utf-8")
-        return f"data:image/png;base64,{encoded}"
-    except Exception:
-        return None
+        if LOGO_PATH.exists():
+            return base64.b64encode(LOGO_PATH.read_bytes()).decode("utf-8")
+    except OSError:
+        pass
+    return None
 
+LOGO = load_logo()
 
-LOGO_DATA = get_logo_data()
+# ==================================================
+# CSS
+# ==================================================
 
-# ------------------------- DESIGN SYSTEM -------------------------
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+:root {
+    --bg: #06060c;
+    --panel: #101122;
+    --blue: #7194ff;
+    --purple: #a17bff;
+    --muted: #9999b7;
+}
 
-    :root {
-        --bg: #05050b;
-        --panel: rgba(15, 16, 32, 0.76);
-        --border: rgba(139, 135, 255, 0.19);
-        --blue: #6c8dff;
-        --violet: #a875ff;
-        --text: #f5f5ff;
-        --muted: #9798b8;
-    }
+html, body, [data-testid="stAppViewContainer"] {
+    background:
+        radial-gradient(ellipse at 50% -10%, rgba(91,72,220,.23), transparent 45%),
+        #06060c !important;
+    color: #f5f4ff;
+    font-family: 'Inter', sans-serif;
+}
 
-    html, body, [data-testid="stAppViewContainer"] {
-        background:
-            radial-gradient(ellipse at 50% -12%, rgba(93, 77, 255, 0.18), transparent 43%),
-            radial-gradient(ellipse at 95% 45%, rgba(44, 90, 255, 0.07), transparent 35%),
-            #05050b !important;
-        color: var(--text);
-        font-family: 'Inter', sans-serif;
-    }
+[data-testid="stHeader"] {
+    background: transparent;
+}
 
-    [data-testid="stHeader"] {
-        background: transparent !important;
-    }
+[data-testid="stMainBlockContainer"] {
+    max-width: 1450px;
+    padding-top: 1.1rem;
+}
 
-    [data-testid="stToolbar"],
-    #MainMenu,
-    footer {
-        visibility: hidden;
-    }
+#MainMenu, footer {
+    visibility: hidden;
+}
 
+/* Sidebar */
+
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #101020, #090910);
+    border-right: 1px solid rgba(151,130,255,.2);
+}
+
+[data-testid="stSidebar"] * {
+    color: #e8e6ff;
+}
+
+.sidebar-brand {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.sidebar-caption {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: #a89bff !important;
+    margin-top: 5px;
+}
+
+.sidebar-status {
+    border: 1px solid rgba(151,130,255,.23);
+    border-radius: 12px;
+    background: rgba(24,24,47,.8);
+    padding: 12px;
+    font-size: 12px;
+    line-height: 1.8;
+    margin: 10px 0;
+}
+
+/* Main header */
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 5px 0 20px;
+    border-bottom: 1px solid rgba(151,130,255,.17);
+    margin-bottom: 20px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-icon {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 14px;
+    background: linear-gradient(145deg,#24244b,#101020);
+    border: 1px solid rgba(155,130,255,.45);
+    box-shadow: 0 0 25px rgba(109,92,255,.17);
+    font-size: 27px;
+}
+
+.brand-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.brand-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 1.2px;
+}
+
+.brand-sub {
+    color: #9998b8;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    margin-top: 4px;
+}
+
+.pill {
+    border: 1px solid rgba(139,132,213,.24);
+    border-radius: 30px;
+    padding: 8px 12px;
+    background: rgba(20,20,40,.7);
+    font-size: 11px;
+    color: #c8c5ec;
+}
+
+/* Hero emblem */
+
+.hero {
+    text-align: center;
+    padding: 10px 0 16px;
+}
+
+.emblem {
+    width: 165px;
+    height: 165px;
+    margin: 0 auto 20px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: radial-gradient(circle, #05050d 24%, #26205a 44%, #10132c 59%, transparent 72%);
+    border: 1px solid rgba(141,128,255,.38);
+    box-shadow: 0 0 45px rgba(111,89,255,.2), inset 0 0 25px rgba(113,126,255,.12);
+}
+
+.emblem:before {
+    content: "";
+    position: absolute;
+    inset: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(101,166,255,.7);
+    box-shadow: 0 0 15px rgba(110,135,255,.25);
+}
+
+.emblem:after {
+    content: "";
+    position: absolute;
+    width: 188px;
+    height: 55px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: #b08aff;
+    border-bottom-color: #5d9bff;
+    transform: rotate(-27deg);
+    filter: drop-shadow(0 0 7px rgba(145,115,255,.75));
+}
+
+.emblem img {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.core {
+    width: 55px;
+    height: 55px;
+    border-radius: 50%;
+    position: relative;
+    z-index: 1;
+    background: radial-gradient(circle at 35% 35%, #252344, #020208 70%);
+    box-shadow: 0 0 22px #7773ff, 0 0 45px rgba(141,80,255,.5);
+}
+
+.kicker {
+    color: #b3a0ff;
+    font-size: 10px;
+    letter-spacing: 4px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.hero h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: clamp(26px,4.2vw,45px);
+    letter-spacing: 2px;
+    line-height: 1.2;
+    margin: 0;
+    color: #fff;
+}
+
+.hero h1 span {
+    background: linear-gradient(100deg,#a4b9ff,#c19bff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.hero p {
+    color: var(--muted);
+    max-width: 490px;
+    margin: 13px auto 20px;
+    line-height: 1.8;
+    font-size: 13px;
+}
+
+.section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #aaa6d4;
+    margin: 18px 0 10px;
+}
+
+/* Buttons */
+
+.stButton > button {
+    border: 1px solid rgba(139,132,213,.25);
+    border-radius: 12px;
+    background: linear-gradient(140deg,rgba(25,25,52,.98),rgba(13,14,29,.98));
+    color: #eceaff;
+    min-height: 46px;
+    font-size: 12px;
+    transition: .2s ease;
+}
+
+.stButton > button:hover {
+    border-color: #9d8aff;
+    background: linear-gradient(140deg,#28234c,#171831);
+    color: #fff;
+}
+
+/* Chat */
+
+[data-testid="stChatMessage"] {
+    background: rgba(17,17,35,.8);
+    border: 1px solid rgba(139,132,213,.18);
+    border-radius: 15px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] {
+    color: #eeedff;
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+[data-testid="stChatInput"] > div {
+    background: #111124 !important;
+    border: 1px solid rgba(146,128,255,.4) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 0 24px rgba(95,79,210,.09);
+}
+
+[data-testid="stChatInput"] textarea {
+    color: #fff !important;
+}
+
+.footer {
+    color: #777794;
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    padding: 20px 0 10px;
+}
+
+@media (max-width: 640px) {
     [data-testid="stMainBlockContainer"] {
-        max-width: 1440px;
-        padding: 1.1rem clamp(1rem, 4vw, 3.5rem) 2rem;
+        padding-left: .8rem;
+        padding-right: .8rem;
     }
-
-    /* Top navigation */
-
-    .topbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 10px 0 22px;
-        border-bottom: 1px solid rgba(160, 155, 255, 0.13);
-        margin-bottom: 25px;
+    .emblem {
+        width: 135px;
+        height: 135px;
     }
-
-    .brand {
-        display: flex;
-        align-items: center;
-        gap: 13px;
-        min-width: 0;
+    .emblem:after {
+        width: 155px;
+        height: 45px;
     }
-
-    .brand-icon {
-        width: 46px;
-        height: 46px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 15px;
-        overflow: hidden;
-        flex-shrink: 0;
-        background: linear-gradient(145deg, #20224b, #10101c);
-        border: 1px solid rgba(154, 135, 255, .5);
-        box-shadow: 0 0 26px rgba(108, 91, 255, .18);
-    }
-
-    .brand-icon img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    .brand-icon .fallback {
-        font-size: 27px;
-        line-height: 1;
-    }
-
     .brand-name {
-        font-family: 'Space Grotesk', sans-serif;
-        font-size: 17px;
-        font-weight: 700;
-        letter-spacing: 1.4px;
-        color: #fff;
-    }
-
-    .brand-byline {
-        color: #9c9abb;
-        font-size: 10px;
-        letter-spacing: 2px;
-        margin-top: 4px;
-    }
-
-    .status-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 9px 13px;
-        border: 1px solid rgba(130, 130, 180, .2);
-        border-radius: 30px;
-        color: #c6c6df;
-        background: rgba(19, 20, 40, .7);
-        font-size: 11px;
-        white-space: nowrap;
-    }
-
-    .status-dot {
-        width: 7px;
-        height: 7px;
-        background: #a78bfa;
-        border-radius: 50%;
-        box-shadow: 0 0 10px #a78bfa;
-    }
-
-    /* Hero */
-
-    .hero {
-        text-align: center;
-        padding: 17px 0 14px;
-    }
-
-    .hero-emblem {
-        width: 180px;
-        height: 180px;
-        margin: 0 auto 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-        border-radius: 50%;
-        background:
-            radial-gradient(circle at 50% 48%,
-                rgba(5, 5, 14, 1) 0%,
-                rgba(8, 8, 20, 1) 26%,
-                rgba(81, 66, 190, .28) 39%,
-                rgba(45, 99, 255, .14) 52%,
-                transparent 70%);
-        border: 1px solid rgba(137, 119, 255, .2);
-        box-shadow:
-            0 0 38px rgba(96, 77, 255, .13),
-            inset 0 0 36px rgba(86, 75, 255, .08);
-    }
-
-    .hero-emblem:before {
-        content: "";
-        position: absolute;
-        inset: 13px;
-        border-radius: 50%;
-        border: 1px solid rgba(111, 156, 255, .45);
-        box-shadow: 0 0 20px rgba(108, 141, 255, .12);
-    }
-
-    .hero-emblem:after {
-        content: "";
-        position: absolute;
-        width: 205px;
-        height: 63px;
-        border: 2px solid transparent;
-        border-top-color: rgba(163, 128, 255, .85);
-        border-bottom-color: rgba(79, 159, 255, .65);
-        border-radius: 50%;
-        transform: rotate(-28deg);
-        filter: drop-shadow(0 0 7px rgba(127, 112, 255, .6));
-    }
-
-    .hero-emblem img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-radius: 50%;
-        position: relative;
-        z-index: 2;
-    }
-
-    .singularity-core {
-        position: relative;
-        z-index: 1;
-        width: 61px;
-        height: 61px;
-        border-radius: 50%;
-        background: radial-gradient(circle at 40% 35%, #20203c 0%, #030309 56%, #000 72%);
-        box-shadow:
-            0 0 0 5px rgba(143, 113, 255, .08),
-            0 0 20px rgba(105, 120, 255, .8),
-            0 0 43px rgba(126, 74, 255, .5);
-    }
-
-    .hero-kicker {
-        color: #a99cff;
-        font-size: 10px;
-        letter-spacing: 4px;
-        font-weight: 700;
-        margin-bottom: 10px;
-    }
-
-    .hero-title {
-        font-family: 'Space Grotesk', sans-serif;
-        font-size: clamp(27px, 4.5vw, 46px);
-        font-weight: 700;
-        line-height: 1.12;
-        letter-spacing: clamp(1px, .4vw, 4px);
-        margin: 0;
-        color: #fff;
-        text-shadow: 0 0 35px rgba(137, 120, 255, .17);
-    }
-
-    .hero-title span {
-        background: linear-gradient(100deg, #e3e3ff 5%, #9b9cff 45%, #c49bff 80%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-
-    .hero-subtitle {
-        color: #9b9ab8;
-        font-size: 13px;
-        line-height: 1.7;
-        margin: 13px auto 0;
-        max-width: 480px;
-    }
-
-    /* Section labels */
-
-    .section-label {
-        color: #aaa8ce;
-        font-size: 10px;
-        letter-spacing: 2.4px;
-        font-weight: 700;
-        margin: 24px 0 12px;
-    }
-
-    /* Suggestion cards */
-
-    div[data-testid="stHorizontalBlock"] {
-        gap: 12px;
-    }
-
-    .suggestion-note {
-        font-size: 11px;
-        color: #8585a6;
-        margin: 4px 0 10px;
-    }
-
-    .stButton > button {
-        border: 1px solid rgba(137, 132, 211, .23);
-        border-radius: 13px;
-        background: linear-gradient(145deg, rgba(21, 22, 45, .96), rgba(12, 13, 27, .96));
-        color: #e8e7ff;
-        min-height: 48px;
-        padding: 11px 14px;
         font-size: 12px;
-        font-weight: 500;
-        transition: border-color .2s, background .2s, transform .2s;
-        width: 100%;
     }
-
-    .stButton > button:hover {
-        border-color: rgba(152, 128, 255, .8);
-        background: linear-gradient(145deg, rgba(40, 35, 81, .96), rgba(17, 20, 45, .96));
-        color: white;
-        transform: translateY(-1px);
+    .brand-sub {
+        font-size: 8px;
+        letter-spacing: .8px;
     }
+}
+</style>
+""", unsafe_allow_html=True)
 
-    .stButton > button:focus {
-        box-shadow: 0 0 0 2px rgba(139, 119, 255, .2);
-        border-color: #a18aff;
-    }
+# ==================================================
+# SIDEBAR
+# ==================================================
 
-    /* Chat */
+with st.sidebar:
+    st.markdown(
+        '<div class="sidebar-brand">✦ SINGULARITY</div>'
+        '<div class="sidebar-caption">QUNIT INTELLIGENCE SYSTEM</div>',
+        unsafe_allow_html=True,
+    )
 
-    [data-testid="stChatMessage"] {
-        background: rgba(14, 15, 31, .73);
-        border: 1px solid rgba(135, 131, 200, .16);
-        border-radius: 17px;
-        padding: 17px 18px;
-        margin-bottom: 13px;
-    }
+    st.divider()
 
-    [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] {
-        color: #ecebff;
-        line-height: 1.75;
-        font-size: 14px;
-    }
+    if st.button("＋  New conversation", use_container_width=True):
+        st.session_state.messages = []
+        st.session_state.pending_prompt = None
+        st.rerun()
 
-    [data-testid="stChatMessageAvatarIcon"] {
-        background: rgba(104, 94, 206, .18);
-        border-radius: 50%;
-    }
-
-    /* Composer */
-
-    [data-testid="stChatInput"] {
-        border-radius: 18px;
-    }
-
-    [data-testid="stChatInput"] > div {
-        border: 1px solid rgba(145, 130, 255, .35) !important;
-        border-radius: 18px !important;
-        background: rgba(13, 14, 30, .97) !important;
-        box-shadow: 0 0 35px rgba(73, 68, 180, .09);
-    }
-
-    [data-testid="stChatInput"] textarea {
-        color: #f5f4ff !important;
-        font-size: 14px !important;
-    }
-
-    [data-testid="stChatInput"] textarea::placeholder {
-        color: #7f809f !important;
-    }
-
-    [data-testid="stChatInput"] button {
-        color: #c7b9ff !important;
-    }
-
-    /* Inputs and utility controls */
-
-    .stTextInput input,
-    .stSelectbox div[data-baseweb="select"] > div {
-        background: #101124;
-        color: #f2f0ff;
-        border-color: rgba(137, 132, 211, .25);
-        border-radius: 10px;
-    }
-
-    .stAlert {
-        border-radius: 12px;
-    }
-
-    .bottom-caption {
-        text-align: center;
-        color: #666782;
-        font-size: 10px;
-        letter-spacing: 1.2px;
-        margin-top: 19px;
-        padding: 15px 0;
-    }
-
-    .empty-space {
-        height: 6px;
-    }
-
-    @media (max-width: 640px) {
-        [data-testid="stMainBlockContainer"] {
-            padding: .7rem .85rem 1.5rem;
-        }
-
-        .hero {
-            padding-top: 12px;
-        }
-
-        .hero-emblem {
-            width: 145px;
-            height: 145px;
-        }
-
-        .hero-emblem:after {
-            width: 165px;
-            height: 49px;
-        }
-
-        .brand-name {
-            font-size: 13px;
-            letter-spacing: .7px;
-        }
-
-        .brand-byline {
-            font-size: 8px;
-            letter-spacing: 1px;
-        }
-
-        .status-pill {
-            padding: 8px;
-            font-size: 9px;
-        }
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ------------------------- HEADER -------------------------
-
-logo_html = (
-    f'<img src="{LOGO_DATA}" alt="Singularity emblem">'
-    if LOGO_DATA
-    else '<span class="fallback">✦</span>'
-)
-
-st.markdown(
-    f"""
-    <div class="topbar">
-        <div class="brand">
-            <div class="brand-icon">{logo_html}</div>
-            <div>
-                <div class="brand-name">SINGULARITY AI</div>
-                <div class="brand-byline">A QUNIT INTELLIGENCE PROJECT</div>
-            </div>
-        </div>
-        <div class="status-pill">
-            <span class="status-dot"></span>
-            CLOUD AI
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ------------------------- CHAT ACTIONS -------------------------
-
-def reset_chat():
-    st.session_state.messages = []
-    st.session_state.last_error = ""
-
-
-# ------------------------- HERO / EMPTY STATE -------------------------
-
-if not st.session_state.messages:
-    if LOGO_DATA:
-        hero_art = f'<img src="{LOGO_DATA}" alt="Singularity AI emblem">'
-    else:
-        hero_art = '<div class="singularity-core"></div>'
+    st.markdown("### Control centre")
 
     st.markdown(
         f"""
-        <div class="hero">
-            <div class="hero-emblem">{hero_art}</div>
-            <div class="hero-kicker">BEYOND THE KNOWN</div>
-            <h1 class="hero-title">ENTER THE <span>SINGULARITY</span></h1>
-            <div class="hero-subtitle">
-                An intelligence for ideas, discovery, and the questions
-                that take you beyond the ordinary.
-            </div>
+        <div class="sidebar-status">
+            <b>AI ENGINE</b><br>
+            OpenRouter Cloud<br><br>
+            <b>CONNECTION</b><br>
+            {"Configured" if API_KEY else "API key required"}<br><br>
+            <b>MODEL</b><br>
+            {MODEL}
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+    st.caption("Your conversations are stored in this app session.")
+
+    if st.button("Clear conversation", use_container_width=True):
+        st.session_state.messages = []
+        st.session_state.pending_prompt = None
+        st.rerun()
+
+    st.divider()
+    st.caption("SINGULARITY AI · BY QUNIT")
+    st.caption("Think deeper. Explore further.")
+
+# ==================================================
+# HEADER
+# ==================================================
+
+if LOGO:
+    brand_icon = f'<img src="data:image/png;base64,{LOGO}" alt="Logo">'
+else:
+    brand_icon = "✦"
+
+st.markdown(
+    f"""
+    <div class="topbar">
+        <div class="brand">
+            <div class="brand-icon">{brand_icon}</div>
+            <div>
+                <div class="brand-name">SINGULARITY AI</div>
+                <div class="brand-sub">CREATED BY QUNIT · BEYOND THE KNOWN</div>
+            </div>
+        </div>
+        <div class="pill">✦ CLOUD AI</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ==================================================
+# HOME SCREEN
+# ==================================================
+
+if not st.session_state.messages:
+    if LOGO:
+        emblem_content = f'<img src="data:image/png;base64,{LOGO}" alt="Emblem">'
+    else:
+        emblem_content = '<div class="core"></div>'
+
     st.markdown(
-        '<div class="section-label">✦ &nbsp; CHOOSE YOUR NEXT EXPLORATION</div>',
+        f"""
+        <div class="hero">
+            <div class="emblem">{emblem_content}</div>
+            <div class="kicker">BEYOND THE KNOWN</div>
+            <h1>ENTER THE <span>SINGULARITY</span></h1>
+            <p>
+                An intelligence for ideas, discovery, and the questions
+                that take you beyond the ordinary.
+            </p>
+        </div>
+        <div class="section-label">✦ &nbsp; CHOOSE YOUR EXPLORATION</div>
+        """,
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        '<div class="suggestion-note">Start with a prompt or type your own below.</div>',
-        unsafe_allow_html=True,
-    )
+    left, right = st.columns(2)
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button("◈  Explain a mind-bending science idea", use_container_width=True):
+    with left:
+        if st.button("◈  Explore a mind-bending science idea", use_container_width=True):
             st.session_state.pending_prompt = (
                 "Explain a mind-bending science idea in an engaging, accurate way."
             )
@@ -544,20 +477,20 @@ if not st.session_state.messages:
 
         if st.button("⌘  Build something with code", use_container_width=True):
             st.session_state.pending_prompt = (
-                "Help me build a useful project with code, step by step."
+                "Help me build a useful coding project step by step."
             )
             st.rerun()
 
-    with col2:
+    with right:
         if st.button("✧  Invent something extraordinary", use_container_width=True):
             st.session_state.pending_prompt = (
-                "Help me invent an original, realistic project idea with a clear plan."
+                "Help me develop an original, realistic invention idea."
             )
             st.rerun()
 
         if st.button("⟡  Explore the universe", use_container_width=True):
             st.session_state.pending_prompt = (
-                "Tell me about a fascinating unsolved question in astronomy."
+                "Explain a fascinating question about the universe."
             )
             st.rerun()
 
@@ -567,83 +500,58 @@ else:
         unsafe_allow_html=True,
     )
 
-    top_left, top_right = st.columns([5, 1])
+    for msg in st.session_state.messages:
+        # No custom Unicode avatars: avoids avatar media-file errors.
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
-    with top_right:
-        if st.button("＋ New chat", use_container_width=True):
-            reset_chat()
-            st.rerun()
-
-    for message in st.session_state.messages:
-        avatar = "✦" if message["role"] == "assistant" else "●"
-        with st.chat_message(message["role"], avatar=avatar):
-            st.markdown(message["content"])
-
-# ------------------------- CONNECTION CHECK -------------------------
+# ==================================================
+# API KEY NOTICE
+# ==================================================
 
 if not API_KEY:
     st.warning(
-        "Cloud AI is not configured yet. Add OPENROUTER_API_KEY "
-        "in your Streamlit app's Secrets settings to start chatting."
+        "OpenRouter is not configured. Add OPENROUTER_API_KEY "
+        "to your Streamlit app's Secrets settings."
     )
 
-# ------------------------- SEND MESSAGE -------------------------
+# ==================================================
+# CHAT
+# ==================================================
 
 prompt = st.chat_input("Ask anything. Explore beyond the known...")
 
-pending_prompt = st.session_state.pop("pending_prompt", None)
-
-if pending_prompt:
-    prompt = pending_prompt
+if st.session_state.pending_prompt:
+    prompt = st.session_state.pending_prompt
+    st.session_state.pending_prompt = None
 
 if prompt:
     prompt = prompt.strip()
 
     if prompt:
-        st.session_state.messages.append(
-            {"role": "user", "content": prompt}
-        )
-        st.session_state.last_error = ""
+        st.session_state.messages.append({
+            "role": "user",
+            "content": prompt,
+        })
 
-        with st.chat_message("user", avatar="●"):
+        with st.chat_message("user"):
             st.markdown(prompt)
 
-        with st.chat_message("assistant", avatar="✦"):
-            response_placeholder = st.empty()
-
+        with st.chat_message("assistant"):
             if not API_KEY:
                 answer = (
-                    "Cloud AI is not configured yet. Open your Streamlit "
-                    "app's Settings or Manage app menu, find Secrets, and "
-                    "add your OpenRouter API key as OPENROUTER_API_KEY. "
-                    "Keep the key private."
+                    "I need an OpenRouter API key before I can answer. "
+                    "Add OPENROUTER_API_KEY in Streamlit Secrets, then try again."
                 )
-                response_placeholder.markdown(answer)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": answer}
-                )
+                st.warning(answer)
+
             else:
                 try:
                     api_messages = [
                         {"role": "system", "content": SYSTEM_PROMPT}
                     ]
 
-                    # Send recent conversation context to the model.
-                    for item in st.session_state.messages[-20:]:
-                        api_messages.append(
-                            {
-                                "role": item["role"],
-                                "content": item["content"],
-                            }
-                        )
-
-                    payload = {
-                        "model": MODEL,
-                        "messages": api_messages,
-                        "temperature": 0.7,
-                        "max_tokens": 1200,
-                        "stream": False,
-                    }
+                    api_messages.extend(st.session_state.messages[-20:])
 
                     headers = {
                         "Authorization": f"Bearer {API_KEY}",
@@ -654,43 +562,42 @@ if prompt:
                         "X-Title": "SINGULARITY AI by QUNIT",
                     }
 
-                    response = requests.post(
-                        OPENROUTER_URL,
-                        headers=headers,
-                        json=payload,
-                        timeout=90,
-                    )
+                    payload = {
+                        "model": MODEL,
+                        "messages": api_messages,
+                        "temperature": 0.7,
+                        "max_tokens": 1200,
+                        "stream": False,
+                    }
+
+                    with st.spinner("Connecting to the singularity..."):
+                        response = requests.post(
+                            API_URL,
+                            headers=headers,
+                            json=payload,
+                            timeout=90,
+                        )
 
                     if not response.ok:
                         try:
                             error_data = response.json()
-                            error_message = (
-                                error_data.get("error", {}).get(
-                                    "message", response.text
-                                )
+                            details = error_data.get("error", {}).get(
+                                "message", "Provider request failed."
                             )
-                        except Exception:
-                            error_message = response.text
+                        except ValueError:
+                            details = "Provider request failed."
 
                         raise RuntimeError(
-                            f"OpenRouter returned HTTP {response.status_code}: "
-                            f"{error_message}"
+                            f"HTTP {response.status_code}: {details}"
                         )
 
                     data = response.json()
                     choices = data.get("choices", [])
 
                     if not choices:
-                        raise RuntimeError(
-                            "The AI provider returned no answer. "
-                            "Try again in a moment."
-                        )
+                        raise RuntimeError("The model returned no answer.")
 
-                    answer = (
-                        choices[0]
-                        .get("message", {})
-                        .get("content", "")
-                    )
+                    answer = choices[0].get("message", {}).get("content", "")
 
                     if isinstance(answer, list):
                         answer = "\n".join(
@@ -702,57 +609,43 @@ if prompt:
                     answer = str(answer).strip()
 
                     if not answer:
-                        answer = "I couldn't produce a response this time. Please try again."
+                        answer = "I couldn't generate a response. Please try again."
 
-                    response_placeholder.markdown(answer)
-
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": answer}
-                    )
+                    st.markdown(answer)
 
                 except requests.Timeout:
                     answer = (
-                        "The request took too long. The free model may be "
-                        "busy. Please try again shortly."
+                        "The request timed out. The free model may be busy. "
+                        "Please try again."
                     )
-                    response_placeholder.error(answer)
-                    st.session_state.last_error = answer
+                    st.error(answer)
 
                 except requests.RequestException:
                     answer = (
-                        "I couldn't connect to the AI service. Check your "
-                        "internet connection and try again."
+                        "Could not connect to OpenRouter. Check your internet "
+                        "connection and try again."
                     )
-                    response_placeholder.error(answer)
-                    st.session_state.last_error = answer
+                    st.error(answer)
 
-                except Exception as error:
-                    # Display a useful diagnostic without exposing the API key.
-                    answer = (
-                        "The AI request failed. Check your OpenRouter model "
-                        "and account availability in Streamlit Secrets. "
-                        f"Details: {str(error)[:500]}"
-                    )
-                    response_placeholder.error(answer)
-                    st.session_state.last_error = answer
+                except Exception as exc:
+                    answer = f"AI request failed: {str(exc)[:400]}"
+                    st.error(answer)
 
-                if st.session_state.last_error:
-                    st.session_state.messages.append(
-                        {
-                            "role": "assistant",
-                            "content": st.session_state.last_error,
-                        }
-                    )
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": answer,
+        })
 
         st.rerun()
 
-# ------------------------- FOOTER -------------------------
+# ==================================================
+# FOOTER
+# ==================================================
 
 st.markdown(
     """
-    <div class="bottom-caption">
-        SINGULARITY AI &nbsp; · &nbsp; CREATED BY QUNIT
-        <br><br>
+    <div class="footer">
+        SINGULARITY AI · CREATED BY QUNIT<br><br>
         THINK DEEPER. BUILD FURTHER. EXPLORE THE UNKNOWN.
     </div>
     """,
