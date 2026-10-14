@@ -5,9 +5,9 @@ from pathlib import Path
 import requests
 import streamlit as st
 
-# ==================================================
+# =========================================================
 # SINGULARITY AI | BY QUNIT
-# ==================================================
+# =========================================================
 
 st.set_page_config(
     page_title="SINGULARITY AI | QUNIT",
@@ -24,11 +24,17 @@ DEFAULT_MODEL = "openrouter/free"
 
 SYSTEM_PROMPT = """
 You are SINGULARITY AI, created by QUNIT.
-Be helpful, intelligent, creative, clear, and accurate.
-Explain difficult ideas simply when useful.
-Use headings, examples, and step-by-step explanations when appropriate.
-Be honest when uncertain and never invent facts.
+
+Be intelligent, helpful, creative, clear, and accurate.
+Explain difficult concepts simply when useful.
+Use examples and step-by-step explanations when appropriate.
+Be honest when uncertain. Never invent facts or sources.
+Adapt your response to the user's question.
 """
+
+# =========================================================
+# SECRETS
+# =========================================================
 
 def get_secret(name, default=""):
     try:
@@ -36,8 +42,13 @@ def get_secret(name, default=""):
     except Exception:
         return default
 
+
 API_KEY = get_secret("OPENROUTER_API_KEY")
 MODEL = get_secret("OPENROUTER_MODEL", DEFAULT_MODEL) or DEFAULT_MODEL
+
+# =========================================================
+# SESSION STATE
+# =========================================================
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -45,23 +56,24 @@ if "messages" not in st.session_state:
 if "pending_prompt" not in st.session_state:
     st.session_state.pending_prompt = None
 
-# ==================================================
-# OPTIONAL LOGO
-# ==================================================
+# =========================================================
+# LOGO
+# =========================================================
 
 def load_logo():
     try:
-        if LOGO_PATH.exists():
+        if LOGO_PATH.is_file():
             return base64.b64encode(LOGO_PATH.read_bytes()).decode("utf-8")
     except OSError:
         pass
     return None
 
+
 LOGO = load_logo()
 
-# ==================================================
-# CSS
-# ==================================================
+# =========================================================
+# STYLING
+# =========================================================
 
 st.markdown("""
 <style>
@@ -69,7 +81,6 @@ st.markdown("""
 
 :root {
     --bg: #06060c;
-    --panel: #101122;
     --blue: #7194ff;
     --purple: #a17bff;
     --muted: #9999b7;
@@ -78,6 +89,7 @@ st.markdown("""
 html, body, [data-testid="stAppViewContainer"] {
     background:
         radial-gradient(ellipse at 50% -10%, rgba(91,72,220,.23), transparent 45%),
+        radial-gradient(ellipse at 95% 40%, rgba(48,84,255,.07), transparent 35%),
         #06060c !important;
     color: #f5f4ff;
     font-family: 'Inter', sans-serif;
@@ -90,13 +102,14 @@ html, body, [data-testid="stAppViewContainer"] {
 [data-testid="stMainBlockContainer"] {
     max-width: 1450px;
     padding-top: 1.1rem;
+    padding-bottom: 2rem;
 }
 
 #MainMenu, footer {
     visibility: hidden;
 }
 
-/* Sidebar */
+/* SIDEBAR */
 
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, #101020, #090910);
@@ -127,11 +140,11 @@ html, body, [data-testid="stAppViewContainer"] {
     background: rgba(24,24,47,.8);
     padding: 12px;
     font-size: 12px;
-    line-height: 1.8;
-    margin: 10px 0;
+    line-height: 1.9;
+    margin: 12px 0;
 }
 
-/* Main header */
+/* TOP NAVIGATION */
 
 .topbar {
     display: flex;
@@ -140,33 +153,37 @@ html, body, [data-testid="stAppViewContainer"] {
     gap: 12px;
     padding: 5px 0 20px;
     border-bottom: 1px solid rgba(151,130,255,.17);
-    margin-bottom: 20px;
+    margin-bottom: 22px;
 }
 
 .brand {
     display: flex;
     align-items: center;
     gap: 12px;
+    min-width: 0;
 }
 
 .brand-icon {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    border-radius: 14px;
+    border-radius: 12px;
     background: linear-gradient(145deg,#24244b,#101020);
     border: 1px solid rgba(155,130,255,.45);
     box-shadow: 0 0 25px rgba(109,92,255,.17);
-    font-size: 27px;
+    font-size: 26px;
 }
 
 .brand-icon img {
+    display: block;
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    border-radius: 0;
 }
 
 .brand-name {
@@ -190,68 +207,116 @@ html, body, [data-testid="stAppViewContainer"] {
     background: rgba(20,20,40,.7);
     font-size: 11px;
     color: #c8c5ec;
+    white-space: nowrap;
 }
 
-/* Hero emblem */
+/* CENTRAL EMBLEM */
 
 .hero {
     text-align: center;
-    padding: 10px 0 16px;
+    padding: 15px 0 18px;
 }
 
+/* Fallback emblem, used only if the PNG is missing */
+
 .emblem {
-    width: 165px;
-    height: 165px;
-    margin: 0 auto 20px;
+    width: 250px;
+    height: 250px;
+    max-width: 90%;
+    margin: 0 auto 23px;
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: radial-gradient(circle, #05050d 24%, #26205a 44%, #10132c 59%, transparent 72%);
-    border: 1px solid rgba(141,128,255,.38);
-    box-shadow: 0 0 45px rgba(111,89,255,.2), inset 0 0 25px rgba(113,126,255,.12);
+    background:
+        radial-gradient(circle at center,
+            #000 0%,
+            #02020b 18%,
+            rgba(67,52,160,.48) 32%,
+            rgba(74,111,255,.22) 48%,
+            transparent 70%);
+    border: 1px solid rgba(126,111,255,.35);
+    box-shadow:
+        0 0 35px rgba(94,78,255,.25),
+        0 0 80px rgba(99,75,255,.16),
+        inset 0 0 35px rgba(92,108,255,.13);
 }
 
 .emblem:before {
     content: "";
     position: absolute;
-    inset: 12px;
+    inset: 23px;
     border-radius: 50%;
-    border: 1px solid rgba(101,166,255,.7);
-    box-shadow: 0 0 15px rgba(110,135,255,.25);
+    border: 3px solid transparent;
+    border-top-color: #a78bfa;
+    border-bottom-color: #5b9bff;
+    transform: rotate(-24deg);
+    box-shadow: 0 0 19px rgba(118,112,255,.55);
 }
 
 .emblem:after {
     content: "";
     position: absolute;
-    width: 188px;
-    height: 55px;
+    width: 285px;
+    height: 86px;
+    max-width: 112%;
     border-radius: 50%;
-    border: 2px solid transparent;
-    border-top-color: #b08aff;
-    border-bottom-color: #5d9bff;
-    transform: rotate(-27deg);
-    filter: drop-shadow(0 0 7px rgba(145,115,255,.75));
+    border: 3px solid transparent;
+    border-top-color: #d2a6ff;
+    border-bottom-color: #4d9dff;
+    transform: rotate(-28deg);
+    filter: drop-shadow(0 0 7px #7667ff);
+}
+
+.core {
+    width: 94px;
+    height: 94px;
+    border-radius: 50%;
+    position: relative;
+    z-index: 1;
+    background: radial-gradient(circle at 35% 30%, #17152c 0%, #05050c 43%, #000 72%);
+    box-shadow:
+        0 0 0 8px rgba(132,111,255,.08),
+        0 0 25px rgba(111,101,255,.95),
+        0 0 55px rgba(123,73,255,.75),
+        0 0 90px rgba(65,112,255,.35);
+}
+
+/*
+If a logo image is present, disable the circular frame and
+decorative rings so the complete original image stays visible.
+*/
+
+.emblem:has(img) {
+    width: min(430px, 90%);
+    height: auto;
+    aspect-ratio: auto;
+    display: block;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+}
+
+.emblem:has(img):before,
+.emblem:has(img):after {
+    display: none;
 }
 
 .emblem img {
     position: relative;
     z-index: 2;
+    display: block;
     width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 50%;
-}
-
-.core {
-    width: 55px;
-    height: 55px;
-    border-radius: 50%;
-    position: relative;
-    z-index: 1;
-    background: radial-gradient(circle at 35% 35%, #252344, #020208 70%);
-    box-shadow: 0 0 22px #7773ff, 0 0 45px rgba(141,80,255,.5);
+    height: auto;
+    max-height: 360px;
+    object-fit: contain;
+    object-position: center;
+    border-radius: 0;
+    margin: 0 auto;
+    filter: drop-shadow(0 0 22px rgba(110,91,255,.22));
 }
 
 .kicker {
@@ -274,10 +339,11 @@ html, body, [data-testid="stAppViewContainer"] {
 .hero h1 span {
     background: linear-gradient(100deg,#a4b9ff,#c19bff);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
-.hero p {
+.hero-description {
     color: var(--muted);
     max-width: 490px;
     margin: 13px auto 20px;
@@ -290,10 +356,10 @@ html, body, [data-testid="stAppViewContainer"] {
     font-weight: 700;
     letter-spacing: 2px;
     color: #aaa6d4;
-    margin: 18px 0 10px;
+    margin: 20px 0 12px;
 }
 
-/* Buttons */
+/* BUTTONS */
 
 .stButton > button {
     border: 1px solid rgba(139,132,213,.25);
@@ -311,7 +377,7 @@ html, body, [data-testid="stAppViewContainer"] {
     color: #fff;
 }
 
-/* Chat */
+/* CHAT */
 
 [data-testid="stChatMessage"] {
     background: rgba(17,17,35,.8);
@@ -338,6 +404,10 @@ html, body, [data-testid="stAppViewContainer"] {
     color: #fff !important;
 }
 
+[data-testid="stChatInput"] textarea::placeholder {
+    color: #7f809f !important;
+}
+
 .footer {
     color: #777794;
     text-align: center;
@@ -351,17 +421,26 @@ html, body, [data-testid="stAppViewContainer"] {
         padding-left: .8rem;
         padding-right: .8rem;
     }
+
     .emblem {
-        width: 135px;
-        height: 135px;
+        width: 190px;
+        height: 190px;
     }
+
     .emblem:after {
-        width: 155px;
-        height: 45px;
+        width: 215px;
+        height: 65px;
     }
+
+    .emblem:has(img) {
+        width: min(320px, 92%);
+        height: auto;
+    }
+
     .brand-name {
         font-size: 12px;
     }
+
     .brand-sub {
         font-size: 8px;
         letter-spacing: .8px;
@@ -370,9 +449,9 @@ html, body, [data-testid="stAppViewContainer"] {
 </style>
 """, unsafe_allow_html=True)
 
-# ==================================================
+# =========================================================
 # SIDEBAR
-# ==================================================
+# =========================================================
 
 with st.sidebar:
     st.markdown(
@@ -390,13 +469,15 @@ with st.sidebar:
 
     st.markdown("### Control centre")
 
+    connection_status = "Configured" if API_KEY else "API key required"
+
     st.markdown(
         f"""
         <div class="sidebar-status">
             <b>AI ENGINE</b><br>
             OpenRouter Cloud<br><br>
             <b>CONNECTION</b><br>
-            {"Configured" if API_KEY else "API key required"}<br><br>
+            {connection_status}<br><br>
             <b>MODEL</b><br>
             {MODEL}
         </div>
@@ -404,7 +485,7 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    st.caption("Your conversations are stored in this app session.")
+    st.caption("Chat history lasts for the current app session.")
 
     if st.button("Clear conversation", use_container_width=True):
         st.session_state.messages = []
@@ -415,12 +496,12 @@ with st.sidebar:
     st.caption("SINGULARITY AI · BY QUNIT")
     st.caption("Think deeper. Explore further.")
 
-# ==================================================
+# =========================================================
 # HEADER
-# ==================================================
+# =========================================================
 
 if LOGO:
-    brand_icon = f'<img src="data:image/png;base64,{LOGO}" alt="Logo">'
+    brand_icon = f'<img src="data:image/png;base64,{LOGO}" alt="Singularity logo">'
 else:
     brand_icon = "✦"
 
@@ -440,13 +521,16 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ==================================================
+# =========================================================
 # HOME SCREEN
-# ==================================================
+# =========================================================
 
 if not st.session_state.messages:
     if LOGO:
-        emblem_content = f'<img src="data:image/png;base64,{LOGO}" alt="Emblem">'
+        emblem_content = (
+            f'<img src="data:image/png;base64,{LOGO}" '
+            'alt="Singularity black hole emblem">'
+        )
     else:
         emblem_content = '<div class="core"></div>'
 
@@ -456,10 +540,10 @@ if not st.session_state.messages:
             <div class="emblem">{emblem_content}</div>
             <div class="kicker">BEYOND THE KNOWN</div>
             <h1>ENTER THE <span>SINGULARITY</span></h1>
-            <p>
+            <div class="hero-description">
                 An intelligence for ideas, discovery, and the questions
                 that take you beyond the ordinary.
-            </p>
+            </div>
         </div>
         <div class="section-label">✦ &nbsp; CHOOSE YOUR EXPLORATION</div>
         """,
@@ -469,7 +553,10 @@ if not st.session_state.messages:
     left, right = st.columns(2)
 
     with left:
-        if st.button("◈  Explore a mind-bending science idea", use_container_width=True):
+        if st.button(
+            "◈  Explore a mind-bending science idea",
+            use_container_width=True,
+        ):
             st.session_state.pending_prompt = (
                 "Explain a mind-bending science idea in an engaging, accurate way."
             )
@@ -482,7 +569,10 @@ if not st.session_state.messages:
             st.rerun()
 
     with right:
-        if st.button("✧  Invent something extraordinary", use_container_width=True):
+        if st.button(
+            "✧  Invent something extraordinary",
+            use_container_width=True,
+        ):
             st.session_state.pending_prompt = (
                 "Help me develop an original, realistic invention idea."
             )
@@ -500,24 +590,24 @@ else:
         unsafe_allow_html=True,
     )
 
-    for msg in st.session_state.messages:
-        # No custom Unicode avatars: avoids avatar media-file errors.
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    for message in st.session_state.messages:
+        # Default avatars avoid Unicode avatar media-file errors.
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-# ==================================================
-# API KEY NOTICE
-# ==================================================
+# =========================================================
+# API CONFIGURATION NOTICE
+# =========================================================
 
 if not API_KEY:
     st.warning(
         "OpenRouter is not configured. Add OPENROUTER_API_KEY "
-        "to your Streamlit app's Secrets settings."
+        "in your Streamlit app's Secrets settings."
     )
 
-# ==================================================
-# CHAT
-# ==================================================
+# =========================================================
+# CHAT ENGINE
+# =========================================================
 
 prompt = st.chat_input("Ask anything. Explore beyond the known...")
 
@@ -537,11 +627,13 @@ if prompt:
         with st.chat_message("user"):
             st.markdown(prompt)
 
+        answer = ""
+
         with st.chat_message("assistant"):
             if not API_KEY:
                 answer = (
                     "I need an OpenRouter API key before I can answer. "
-                    "Add OPENROUTER_API_KEY in Streamlit Secrets, then try again."
+                    "Add OPENROUTER_API_KEY to Streamlit Secrets and try again."
                 )
                 st.warning(answer)
 
@@ -550,7 +642,6 @@ if prompt:
                     api_messages = [
                         {"role": "system", "content": SYSTEM_PROMPT}
                     ]
-
                     api_messages.extend(st.session_state.messages[-20:])
 
                     headers = {
@@ -582,10 +673,10 @@ if prompt:
                         try:
                             error_data = response.json()
                             details = error_data.get("error", {}).get(
-                                "message", "Provider request failed."
+                                "message", "The provider request failed."
                             )
                         except ValueError:
-                            details = "Provider request failed."
+                            details = "The provider request failed."
 
                         raise RuntimeError(
                             f"HTTP {response.status_code}: {details}"
@@ -638,9 +729,9 @@ if prompt:
 
         st.rerun()
 
-# ==================================================
+# =========================================================
 # FOOTER
-# ==================================================
+# =========================================================
 
 st.markdown(
     """
